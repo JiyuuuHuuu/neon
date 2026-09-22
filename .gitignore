@@ -37,3 +37,6 @@ docker-compose/docker-compose-parallel.yml
 # various files for local testing
 /proxy/.subzero
 local_proxy.json
+
+**.log
+**.json
