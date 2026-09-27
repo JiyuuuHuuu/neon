@@ -158,8 +158,73 @@ where `<n>` is the next unused integer. Each experiment directory contains:
 - A markdown doc (typically `README.md`) recording: what the experiment does, the end goal /
   hypothesis, exact steps to reproduce the results (commands, configuration, environment), and
   takeaways (including negative or inconclusive results — don't omit them).
+- A `log.md` recording the detailed *process*, as distinct from `README.md`'s outcome-oriented
+  narrative: every setup/modification step taken (scripts written or changed, configs deployed,
+  commands run), and *why* each step was taken — including false starts, bugs hit and how they were
+  diagnosed/fixed, and deviations from the original plan, in roughly chronological order. Update it
+  as the experiment progresses, not just at the end.
 - The raw experiment data (or a pointer to where it lives, if too large to commit).
 - Figures, if requested or if they materially clarify the result.
 
 This is a standing policy for this directory, not a one-off — apply it to every future experiment
 without being asked again.
+
+## CloudLab multi-node cluster deployment (lessons from experiment 2)
+
+Hand-deploying Neon's services across several physically separate CloudLab nodes (as opposed to
+a single-box `neon_local` stack) is meaningfully different and has real gotchas. Full narrative,
+topology and scripts: `experiments/2-branch-interference-cluster/README.md` and its `scripts/`
+(`lib.py`, `setup_cluster.py`). Hardware/network/filesystem specifics for the `m400` CloudLab
+profile: `agent/cloudlab.md` — re-verify those numbers on every fresh provision, they change
+(hostnames, free disk) on reprovision.
+
+### Topology used (6 nodes, adapt node count/roles as needed)
+
+| Node | Role |
+|---|---|
+| node0 | pageserver only (device under test) |
+| node1 | storage_broker + storage_controller + its own Postgres (storcon's metadata DB) + safekeeper + a compute-hook stub |
+| node2 | a persistent compute (endpoint) |
+| node3–5 | load-generator / client nodes |
+
+Bring-up order: storage_broker → storage_controller's own Postgres → compute-hook stub →
+storage_controller → safekeeper → pageserver → create tenant/timeline via the storage_controller
+HTTP API → hand-launch `compute_ctl` over SSH on the compute node(s). No `neon_local` is involved
+once services are spread across real nodes — everything is driven by hand-built `config.json`s and
+direct HTTP/SSH calls (see `lib.py`'s `tenant_create`/`timeline_create_root`/`endpoint_start`).
+
+### Watch-outs
+
+- **Do management-API calls from a node with private-LAN access, not an off-cluster
+  coordinator.** Plain `requests` calls from a coordinator machine outside the CloudLab private LAN
+  hang/timeout against the storage_controller/pageserver HTTP APIs; route every management call
+  through `curl` over SSH to a LAN-resident node instead.
+- **`/mydata` is root-owned by default** on a fresh CloudLab instance, on every node — `chown` it
+  before anything tries to write there.
+- **Install protoc yourself; don't trust apt.** Ubuntu 22.04's `protoc` package (3.12.4) predates
+  proto3 `optional` and fails `storage_broker`'s build. Install a matching-arch (e.g. aarch64) protoc
+  from the protobuf GitHub releases, **including its `include/` dir of well-known types** (not just
+  the binary — a bare binary copy is not enough), and put it ahead of apt's on `PATH`.
+- **`compute_ctl` needs `LD_LIBRARY_PATH` set in its own process environment**, not only baked into
+  the `postgres` binary's rpath — otherwise the `neon.so` extension fails to load
+  (`libpq.so.5: cannot open shared object file`).
+- **`spec.safekeepers_generation` must be `null`**, not a real generation number, for a hand-deployed
+  compute talking to a safekeeper that was never registered via `timelines_onto_safekeepers` —
+  a real value makes walproposer send `allow_timeline_creation=false` and the safekeeper refuses the
+  timeline permanently.
+- **Generate a fresh `config.json` template from a throwaway single-node `neon_local` stack on the
+  coordinator**, matching the exact checkout's schema — don't trust an older docker-compose
+  reference spec as a working template as-is; the shape drifts across versions.
+- **Wrap every remote load-generator invocation (e.g. `pagebench`) in GNU `timeout`.** Under severe
+  pageserver contention a client can block indefinitely waiting on a request that will never be
+  serviced; the tool's own `--runtime`/deadline flag does not protect against this, and an unwrapped
+  SSH call can hang for over an hour with the remote process idling at 0% CPU (network-blocked, not
+  looping). Use a generous grace window (e.g. runtime + soft timeout + hard-kill) so a genuine
+  extreme-tail measurement isn't silently turned into an empty one.
+- **A handful of 8-core nodes saturate fast.** On `m400` hardware, ~20 concurrently pgbench-driven
+  Postgres instances on one node is already enough to make the node itself the bottleneck — budget
+  load-generator placement accordingly, and expect generic node-level contention to dominate over
+  more subtle tenant/branch-scoped effects at this scale (see experiment 2's headline result).
+- **`/proj/<project>` (NFS) is small and shared** — check free space before assuming a large build or
+  dataset fits; keep large build trees (a full Neon build is ~8.7 GB) on a node's local disk and only
+  keep source + stripped binaries on the NFS mount so they survive teardown.
