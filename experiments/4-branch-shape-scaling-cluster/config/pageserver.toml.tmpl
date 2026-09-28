@@ -5,7 +5,7 @@ broker_endpoint   = "http://__STORCON_IP__:50051"
 control_plane_api = "http://__STORCON_IP__:1234/upcall/v1/"
 availability_zone = "lan"
 
-remote_storage = { local_path = "__REMOTE_HOME__/ps-remote" }
+remote_storage = __REMOTE_STORAGE__
 
 max_file_descriptors = 32768
 page_cache_size      = 1048576

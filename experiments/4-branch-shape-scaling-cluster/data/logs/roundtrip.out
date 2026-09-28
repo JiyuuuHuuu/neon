@@ -1,0 +1,92 @@
+=== minio ===
+
+== stopping pageserver on node0 ==
+
+== mirroring /users/JiyuHu23/ps-remote -> minio ==
+  mirrored in 11s
+
+== write pageserver.toml (backend=minio) + identity.toml on node0, compute_hook_stub.py on node1 ==
+
+== pageserver on node0:9898/64000 (backend=minio) ==
+
+== registering pageserver node with storage_controller and waiting for Active ==
+  pageserver Active: [{'id': 1, 'availability': 'Active', 'scheduling': 'Active', 'availability_zone_id': 'lan', 'listen_http_addr': '10.10.1.1', 'listen_http_port': 9898, 'listen_https_port': None, 'listen_pg_addr': '10.10.1.1', 'listen_pg_port': 64000, 'listen_grpc_addr': None, 'listen_grpc_port': None}]
+  tenant Active 9.2s after pageserver start
+{
+ "backend": "minio",
+ "copy_s": 11.077654838562012,
+ "attach_s": 9.190445184707642,
+ "index_parts_before": [
+  "index_part.json-00000001",
+  "index_part.json-00000002"
+ ],
+ "index_parts_after": [
+  "index_part.json-00000001",
+  "index_part.json-00000002"
+ ],
+ "remote_error_lines": 0,
+ "ts": 1790623435.6575856
+}
+PASS [minio] evicted 000000000000000000000000000000000000-FFF... (now remote-only)
+PASS [minio] downloaded it back from minio (resident again)
+PASS [minio] on-demand download counter advanced 0 -> 1
+PASS [minio] new test tenant uploaded 4 objects (layers + index_part) to the bucket
+PASS [minio] tenant deleted; 0 objects left in the bucket
+=== s3 ===
+
+== stopping pageserver on node0 ==
+
+== mirroring /users/JiyuHu23/ps-remote -> s3 ==
+  mirrored in 11s
+
+== write pageserver.toml (backend=s3) + identity.toml on node0, compute_hook_stub.py on node1 ==
+
+== pageserver on node0:9898/64000 (backend=s3) ==
+
+== registering pageserver node with storage_controller and waiting for Active ==
+  pageserver Active: [{'id': 1, 'availability': 'Active', 'scheduling': 'Active', 'availability_zone_id': 'lan', 'listen_http_addr': '10.10.1.1', 'listen_http_port': 9898, 'listen_https_port': None, 'listen_pg_addr': '10.10.1.1', 'listen_pg_port': 64000, 'listen_grpc_addr': None, 'listen_grpc_port': None}]
+  tenant Active 8.8s after pageserver start
+{
+ "backend": "s3",
+ "copy_s": 11.06168818473816,
+ "attach_s": 8.767853260040283,
+ "index_parts_before": [
+  "index_part.json-00000001",
+  "index_part.json-00000002"
+ ],
+ "index_parts_after": [
+  "index_part.json-00000001",
+  "index_part.json-00000002"
+ ],
+ "remote_error_lines": 0,
+ "ts": 1790623738.7256987
+}
+PASS [s3] evicted 000000000000000000000000000000000000-FFF... (now remote-only)
+PASS [s3] downloaded it back from s3 (resident again)
+PASS [s3] on-demand download counter advanced 0 -> 1
+PASS [s3] new test tenant uploaded 4 objects (layers + index_part) to the bucket
+PASS [s3] tenant deleted; 0 objects left in the bucket
+=== switching back to localfs ===
+
+== stopping pageserver on node0 ==
+
+== write pageserver.toml (backend=localfs) + identity.toml on node0, compute_hook_stub.py on node1 ==
+
+== pageserver on node0:9898/64000 (backend=localfs) ==
+
+== registering pageserver node with storage_controller and waiting for Active ==
+  pageserver Active: [{'id': 1, 'availability': 'Active', 'scheduling': 'Active', 'availability_zone_id': 'lan', 'listen_http_addr': '10.10.1.1', 'listen_http_port': 9898, 'listen_https_port': None, 'listen_pg_addr': '10.10.1.1', 'listen_pg_port': 64000, 'listen_grpc_addr': None, 'listen_grpc_port': None}]
+  tenant Active 8.3s after pageserver start
+{
+ "backend": "localfs",
+ "copy_s": null,
+ "attach_s": 8.270172834396362,
+ "index_parts_before": null,
+ "index_parts_after": [
+  "index_part.json-00000001",
+  "index_part.json-00000002"
+ ],
+ "remote_error_lines": 0,
+ "ts": 1790624014.6897988
+}
+ROUNDTRIP DONE

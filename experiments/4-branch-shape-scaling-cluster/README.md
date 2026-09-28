@@ -489,3 +489,89 @@ IOPS/throughput or queue-depth metric would be needed to settle it.
    doesn't matter much once you're already measuring the mechanism that should
    make it matter) is reported in full rather than only the positive one
    (branching hurts) -- per the standing policy for this directory.
+
+## Follow-up: pluggable remote-storage backend (local_fs vs MinIO vs AWS S3)
+
+Run 2026-09-27. The warm horizontal Tier STORAGE sweep (N = 1..32, 3 reps, same prod tenant,
+manifest, and pagebench settings as above) was rerun with the pageserver's `remote_storage` pointed
+at three backends in turn:
+
+- **local_fs**: node0's `~/ps-remote`, the original setup (SSD root partition).
+- **MinIO**: single node on node3, data on `/mydata` (mostly a 10k-RPM HDD), over the 10 Gbps LAN.
+- **AWS S3**: bucket `dassl-jiyu-neon-backend` in us-east-2, about 15 ms TCP connect from CloudLab
+  Wisconsin.
+
+Data: `data/raw_backend_prod.jsonl`, `data/backend_{switch,probe}_prod.jsonl`,
+`data/summary_table_backend_prod.md`, `figures/latency_vs_n_by_backend_prod.png`.
+
+**How it works.** The backend is selected with `deploy.py --backend` or `storage_backend.py switch`.
+`switch` stops the pageserver and copies node0's `~/ps-remote` into the bucket with
+`aws s3 sync` (the local_fs layout equals the S3 key layout under `prefix_in_bucket`). It then
+rewrites `pageserver.toml` from `lib.remote_storage_toml` and restarts the pageserver with
+`AWS_PROFILE`. Credentials exist only in `~/.neon-exp4/` and `~/.aws/` on the coordinator, and in
+a chmod-600 `~/.aws/credentials` on node0. They are never in git and never on a command line.
+MinIO is built from source (`go install github.com/minio/minio@master`), because dl.min.io now
+returns 410 for community binaries.
+
+### Result: warm read latency does not depend on the backend
+
+| N | local_fs p99 (per-rep) | MinIO p99 | S3 p99 |
+|---:|---|---|---|
+| 1 | 63 / 50 / 46 | 62 / 53 / 47 | 61 / 52 / 46 |
+| 4 | 193 / 167 / 185 | 207 / 191 / 173 | 204 / 180 / 171 |
+| 16 | 708 / 666 / 623 | 723 / 625 / 611 | 726 / 659 / 610 |
+| 32 | 1245 / 950 / 1183 | 1420 / 1230 / 1127 | 1175 / 1285 / 1120 |
+
+All 54 points were clean. Not one point saw an eviction or on-demand download, so **no GetPage ever
+touched remote storage**, as this protocol intends. The three backends agree within
+rep-to-rep spread at every N. The pooled per-branch CIs in the summary table look non-overlapping
+at N=32 only because the 32 branches within a rep are not independent; read the per-rep columns.
+Rep 0 is consistently the slowest at N ≥ 8 for every backend. That is warm-up after the backend
+switch's pageserver restart, and it is identical across arms. The local_fs rerun also reproduces
+the original experiment 4 numbers (e.g. N=16 p99 666 ms vs 674 ms).
+
+### Where the backends actually differ (raw probe from node0, and restart)
+
+| | local_fs | MinIO (LAN, HDD-backed) | S3 us-east-2 |
+|---|---:|---:|---:|
+| small GET p50 / p99 (`index_part`, reused connection) | 0.02 / 0.03 ms | 2.8 / 3.0 ms | 35 / 59 ms |
+| first small GET (new connection + TLS) | 0.07 ms | 3.7 ms | 169 ms |
+| 256 MiB layer GET, cold, single stream | ~200 MB/s | ~150–165 MB/s | 71–95 MB/s (2.8–3.8 s) |
+| copy 24 GB into backend | – | 246 s | 160 s |
+| restart → tenant Active | 8.3 / 8.4 s | 12.3 s | 8.9 s |
+
+S3 is about 12× slower than MinIO per request and about 2× lower in single-stream bandwidth. Any
+path that downloads layers would expose this: cold reads after eviction, attach on a fresh disk, or
+shard migration. **This warm protocol exercises none of those paths.** Restart time is
+dominated by pageserver startup, not remote I/O (S3 was faster than MinIO), because attach only
+fetches a few small `index_part` files. A **cold-read** variant (evict the layers of the root and
+branches before each point) is the natural next step if backend latency is the question.
+
+### Caveats
+
+- **The drift-control point is a post-restart transient, not drift.** local_fs at N=32, measured
+  about 1 min after the final restart plus warmup, gave p99 2322 ms. At the same time, layers/read
+  was 3.43 (every other point: 2.83–2.84) and the node0 HDD was at 100% utilization. A second point
+  about 4 min later was back to layers/read 2.84 and p99 1403 ms, inside every backend's rep-0
+  range. The main sweeps reach N=32 about 6 min after their restart, so they never saw this
+  window. The cause of the transient layers/read bump is not established.
+- The arms ran in the fixed order local_fs → MinIO → S3, not interleaved. The drift check above is
+  the only guard against time drift.
+- No new `index_part` generation was uploaded on attach in any arm, since nothing changed. A
+  separate round-trip test (2026-09-28, `data/logs/roundtrip.out`) confirmed full read/write on
+  both MinIO and S3. It evicted a prod-branch layer and downloaded it back from the backend, where
+  the on-demand download counter advanced. It created a throwaway tenant, whose layers and
+  `index_part` appeared in the bucket, then deleted that tenant, after which 0 objects remained.
+
+### Reproduction
+
+```bash
+cd experiments/4-branch-shape-scaling-cluster/scripts
+python3 storage_backend.py setup-minio          # needs ~/.neon-exp4/bin/minio built first
+export EXP4_S3_BUCKET=<bucket>                   # coordinator ~/.aws profile neon-exp4
+for b in localfs minio s3; do
+  python3 storage_backend.py switch $b && python3 storage_backend.py probe $b && python3 backend_sweep.py $b
+done
+python3 storage_backend.py switch localfs        # leave the cluster on the original backend
+python3 analyze_backend.py
+```

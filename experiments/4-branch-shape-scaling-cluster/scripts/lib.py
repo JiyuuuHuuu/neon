@@ -86,6 +86,60 @@ REMOTE_LD_LIBRARY_PATH = f"{REMOTE_BIN}/pg_install/v17/lib"
 
 PG_VERSION = 17
 
+# --------------------------------------------------------------------------
+# Pageserver remote-storage backend (localfs | minio | s3). Secrets never enter the
+# repo: MinIO root creds are generated into SECRETS_DIR on the coordinator, S3 creds
+# come from the coordinator's ~/.aws/credentials profile S3_PROFILE. Both are shipped
+# to node0 as a chmod-600 ~/.aws/credentials and selected via AWS_PROFILE, so they
+# never appear on a remote command line.
+# --------------------------------------------------------------------------
+
+BACKENDS = ("localfs", "minio", "s3")
+SECRETS_DIR = Path.home() / ".neon-exp4"
+MINIO_NODE = 3
+MINIO_DATA = "/mydata/minio"
+MINIO_PORT = 9000
+MINIO_BUCKET = "neon-exp4"
+S3_PROFILE = "neon-exp4"
+S3_REGION = "us-east-2"
+BUCKET_PREFIX = "exp4/pageserver"
+LOCALFS_REMOTE_DIR = f"{REMOTE_HOME}/ps-remote"
+NODE0_AWS_PROFILE = {"minio": "exp4-minio", "s3": "exp4-s3"}
+
+
+def minio_endpoint() -> str:
+    return f"http://{node_ip(MINIO_NODE)}:{MINIO_PORT}"
+
+
+def s3_bucket() -> str:
+    b = os.environ.get("EXP4_S3_BUCKET")
+    if not b:
+        raise RuntimeError("set EXP4_S3_BUCKET to the S3 bucket name")
+    return b
+
+
+def backend_bucket(backend: str) -> str:
+    return MINIO_BUCKET if backend == "minio" else s3_bucket()
+
+
+def remote_storage_toml(backend: str) -> str:
+    if backend == "localfs":
+        return f'{{ local_path = "{LOCALFS_REMOTE_DIR}" }}'
+    if backend == "minio":
+        return (f'{{ endpoint = "{minio_endpoint()}", bucket_name = "{MINIO_BUCKET}", '
+                f'bucket_region = "{S3_REGION}", prefix_in_bucket = "{BUCKET_PREFIX}" }}')
+    if backend == "s3":
+        return (f'{{ bucket_name = "{s3_bucket()}", bucket_region = "{S3_REGION}", '
+                f'prefix_in_bucket = "{BUCKET_PREFIX}" }}')
+    raise ValueError(backend)
+
+
+def pageserver_env(backend: str) -> str:
+    """Env prefix for the pageserver command line; only a profile name, no secrets."""
+    if backend == "localfs":
+        return ""
+    return f"env AWS_PROFILE={NODE0_AWS_PROFILE[backend]} AWS_REGION={S3_REGION} "
+
 
 def node_host(node: int) -> str:
     return NODES[node][0]

@@ -1,0 +1,202 @@
+### 17:49:45 storage_backend.py switch minio
+
+== stopping pageserver on node0 ==
+
+== mirroring /users/JiyuHu23/ps-remote -> minio ==
+  mirrored in 246s
+
+== write pageserver.toml (backend=minio) + identity.toml on node0, compute_hook_stub.py on node1 ==
+
+== pageserver on node0:9898/64000 (backend=minio) ==
+
+== registering pageserver node with storage_controller and waiting for Active ==
+  pageserver Active: [{'id': 1, 'availability': 'Active', 'scheduling': 'Active', 'availability_zone_id': 'lan', 'listen_http_addr': '10.10.1.1', 'listen_http_port': 9898, 'listen_https_port': None, 'listen_pg_addr': '10.10.1.1', 'listen_pg_port': 64000, 'listen_grpc_addr': None, 'listen_grpc_port': None}]
+  tenant Active 12.3s after pageserver start
+{
+ "backend": "minio",
+ "copy_s": 245.88899850845337,
+ "attach_s": 12.333917617797852,
+ "index_parts_before": [
+  "index_part.json-00000001",
+  "index_part.json-00000002"
+ ],
+ "index_parts_after": [
+  "index_part.json-00000001",
+  "index_part.json-00000002"
+ ],
+ "remote_error_lines": 0,
+ "ts": 1790531671.6813915
+}
+### 17:54:31 storage_backend.py probe minio
+Traceback (most recent call last):
+  File "/mydata/jiyu/neon/experiments/4-branch-shape-scaling-cluster/scripts/storage_backend.py", line 363, in <module>
+    main()
+  File "/mydata/jiyu/neon/experiments/4-branch-shape-scaling-cluster/scripts/storage_backend.py", line 359, in main
+    probe(args.backend)
+  File "/mydata/jiyu/neon/experiments/4-branch-shape-scaling-cluster/scripts/storage_backend.py", line 321, in probe
+    raise RuntimeError(f"small-object probe got HTTP codes {codes}")
+RuntimeError: small-object probe got HTTP codes {'403'}
+### 17:55:00 storage_backend.py probe minio
+{
+ "backend": "minio",
+ "small_key": "tenants/43babb6642c84af9ad1def295dcfaa84/timelines/965145c7408f4582b933e53033732dd9/index_part.json-00000002",
+ "large_key": "tenants/43babb6642c84af9ad1def295dcfaa84/timelines/965145c7408f4582b933e53033732dd9/000000067F000000050000400C000009D422-000000067F000000050000400C00000A2D68__0000000138547BC1-00000001DB3FB189-00000001",
+ "small_first_ms": 3.7190000000000003,
+ "small_p50_ms": 2.77,
+ "small_p99_ms": 3.0368000000000004,
+ "small_mean_ms": 2.789809045226131,
+ "large": [
+  {
+   "time_s": 1.762037,
+   "MBps": 152.362421,
+   "bytes": 268468224,
+   "http": "200"
+  },
+  {
+   "time_s": 1.63432,
+   "MBps": 164.269068,
+   "bytes": 268468224,
+   "http": "200"
+  },
+  {
+   "time_s": 1.674977,
+   "MBps": 160.281737,
+   "bytes": 268468224,
+   "http": "200"
+  }
+ ],
+ "ts": 1790531725.3333848
+}
+### 17:55:25 backend_sweep.py minio
+=== warmup N=32 (untimed) ===
+  warmup health: []
+=== minio horizontal N=1 rep=0 ===
+=== minio horizontal N=2 rep=0 ===
+=== minio horizontal N=4 rep=0 ===
+=== minio horizontal N=8 rep=0 ===
+=== minio horizontal N=16 rep=0 ===
+=== minio horizontal N=32 rep=0 ===
+=== minio horizontal N=1 rep=1 ===
+=== minio horizontal N=2 rep=1 ===
+=== minio horizontal N=4 rep=1 ===
+=== minio horizontal N=8 rep=1 ===
+=== minio horizontal N=16 rep=1 ===
+=== minio horizontal N=32 rep=1 ===
+=== minio horizontal N=1 rep=2 ===
+=== minio horizontal N=2 rep=2 ===
+=== minio horizontal N=4 rep=2 ===
+=== minio horizontal N=8 rep=2 ===
+=== minio horizontal N=16 rep=2 ===
+=== minio horizontal N=32 rep=2 ===
+### 18:13:21 storage_backend.py switch s3
+
+== stopping pageserver on node0 ==
+
+== mirroring /users/JiyuHu23/ps-remote -> s3 ==
+  mirrored in 160s
+
+== write pageserver.toml (backend=s3) + identity.toml on node0, compute_hook_stub.py on node1 ==
+
+== pageserver on node0:9898/64000 (backend=s3) ==
+
+== registering pageserver node with storage_controller and waiting for Active ==
+  pageserver Active: [{'id': 1, 'availability': 'Active', 'scheduling': 'Active', 'availability_zone_id': 'lan', 'listen_http_addr': '10.10.1.1', 'listen_http_port': 9898, 'listen_https_port': None, 'listen_pg_addr': '10.10.1.1', 'listen_pg_port': 64000, 'listen_grpc_addr': None, 'listen_grpc_port': None}]
+  tenant Active 8.9s after pageserver start
+{
+ "backend": "s3",
+ "copy_s": 160.41336584091187,
+ "attach_s": 8.939864873886108,
+ "index_parts_before": [
+  "index_part.json-00000001",
+  "index_part.json-00000002"
+ ],
+ "index_parts_after": [
+  "index_part.json-00000001",
+  "index_part.json-00000002"
+ ],
+ "remote_error_lines": 0,
+ "ts": 1790532996.4094317
+}
+### 18:16:36 storage_backend.py probe s3
+{
+ "backend": "s3",
+ "small_key": "tenants/43babb6642c84af9ad1def295dcfaa84/timelines/965145c7408f4582b933e53033732dd9/index_part.json-00000002",
+ "large_key": "tenants/43babb6642c84af9ad1def295dcfaa84/timelines/965145c7408f4582b933e53033732dd9/000000067F000000050000400C000009D422-000000067F000000050000400C00000A2D68__0000000138547BC1-00000001DB3FB189-00000001",
+ "small_first_ms": 168.583,
+ "small_p50_ms": 34.679,
+ "small_p99_ms": 59.4640200000001,
+ "small_mean_ms": 35.72209547738694,
+ "large": [
+  {
+   "time_s": 3.777794,
+   "MBps": 71.064812,
+   "bytes": 268468224,
+   "http": "200"
+  },
+  {
+   "time_s": 2.867372,
+   "MBps": 93.628669,
+   "bytes": 268468224,
+   "http": "200"
+  },
+  {
+   "time_s": 2.839998,
+   "MBps": 94.531131,
+   "bytes": 268468224,
+   "http": "200"
+  }
+ ],
+ "ts": 1790533026.6602173
+}
+### 18:17:06 backend_sweep.py s3
+=== warmup N=32 (untimed) ===
+  warmup health: []
+=== s3 horizontal N=1 rep=0 ===
+=== s3 horizontal N=2 rep=0 ===
+=== s3 horizontal N=4 rep=0 ===
+=== s3 horizontal N=8 rep=0 ===
+=== s3 horizontal N=16 rep=0 ===
+=== s3 horizontal N=32 rep=0 ===
+=== s3 horizontal N=1 rep=1 ===
+=== s3 horizontal N=2 rep=1 ===
+=== s3 horizontal N=4 rep=1 ===
+=== s3 horizontal N=8 rep=1 ===
+=== s3 horizontal N=16 rep=1 ===
+=== s3 horizontal N=32 rep=1 ===
+=== s3 horizontal N=1 rep=2 ===
+=== s3 horizontal N=2 rep=2 ===
+=== s3 horizontal N=4 rep=2 ===
+=== s3 horizontal N=8 rep=2 ===
+=== s3 horizontal N=16 rep=2 ===
+=== s3 horizontal N=32 rep=2 ===
+### 18:34:54 storage_backend.py switch localfs
+
+== stopping pageserver on node0 ==
+
+== write pageserver.toml (backend=localfs) + identity.toml on node0, compute_hook_stub.py on node1 ==
+
+== pageserver on node0:9898/64000 (backend=localfs) ==
+
+== registering pageserver node with storage_controller and waiting for Active ==
+  pageserver Active: [{'id': 1, 'availability': 'Active', 'scheduling': 'Active', 'availability_zone_id': 'lan', 'listen_http_addr': '10.10.1.1', 'listen_http_port': 9898, 'listen_https_port': None, 'listen_pg_addr': '10.10.1.1', 'listen_pg_port': 64000, 'listen_grpc_addr': None, 'listen_grpc_port': None}]
+  tenant Active 8.4s after pageserver start
+{
+ "backend": "localfs",
+ "copy_s": null,
+ "attach_s": 8.431329488754272,
+ "index_parts_before": null,
+ "index_parts_after": [
+  "index_part.json-00000001",
+  "index_part.json-00000002"
+ ],
+ "remote_error_lines": 0,
+ "ts": 1790534116.3976393
+}
+### 18:35:16 backend_sweep.py localfs --session drift --reps 1 --grid 32
+=== warmup N=32 (untimed) ===
+  warmup health: []
+=== localfs horizontal N=32 rep=0 ===
+### 18:37:12 analyze_backend.py
+/mydata/jiyu/neon/experiments/4-branch-shape-scaling-cluster/figures/latency_vs_n_by_backend_prod.png
+/mydata/jiyu/neon/experiments/4-branch-shape-scaling-cluster/data/summary_table_backend_prod.md
+### 18:37:16 ALL DONE

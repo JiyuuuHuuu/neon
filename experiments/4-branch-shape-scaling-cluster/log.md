@@ -484,3 +484,27 @@ active monitoring and when you'll check again).
   written up from the real production data. Remaining loose end, if anyone wants
   to pick it up: fix Tier COMPUTE's ephemeral-port-exhaustion bug (see above) and
   re-run just that tier for a cleaner secondary-tier comparison.
+
+## 2026-09-27: remote-storage backend comparison (local_fs / MinIO / S3)
+
+Built the pluggable backend (`storage_backend.py`, `backend_sweep.py`, `analyze_backend.py`,
+`deploy.py --backend`) and ran the warm horizontal sweep N=1..32 × 3 reps on each backend. See
+README "Follow-up: pluggable remote-storage backend". Issues hit along the way:
+
+- dl.min.io returns **410** for both the community `minio` server and `mc`. Built MinIO from source
+  with Go 1.27.1 (`go install github.com/minio/minio@master`, CGO off) and used the AWS CLI v2
+  (installed without root on node0) instead of `mc`.
+- The IAM policy initially lacked `s3:ListBucket` on the **bucket** ARN (object ARNs don't cover
+  it). The pageserver needs it for attach. `GetBucketLocation` is still denied, which is harmless:
+  the region is configured.
+- The first `switch` crashed polling the pageserver while its HTTP port was still closed (curl
+  rc=7, while storcon's "Active" was stale). Now tolerated.
+- The probe got **403** from MinIO: curl 7.81's `--aws-sigv4` omits `x-amz-content-sha256`. Replaced
+  it with `aws s3 presign` URLs plus plain curl.
+- **Process failure:** the MinIO arm sat idle after the local_fs sweep finished until the user asked
+  for status. Everything after that ran as one chained script under a phase monitor.
+- The drift-control point showed a post-restart transient (layers/read 3.43, HDD at 100%, p99
+  2322 ms). A re-measurement 4 min later was normal. See the README caveats.
+
+Cluster left on **local_fs**. MinIO is still running on node3, and the prod data is still in the
+MinIO and S3 buckets (see the cleanup notes in the final report).

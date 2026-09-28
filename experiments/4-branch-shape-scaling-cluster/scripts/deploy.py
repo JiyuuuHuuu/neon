@@ -84,11 +84,12 @@ def sync_binaries():
         lib.rsync_to(node, str(REPO_PG_INSTALL_V17) + "/", f"{lib.REMOTE_BIN}/pg_install/v17/")
 
 
-def sync_config():
-    step("write pageserver.toml + identity.toml on node0, compute_hook_stub.py on node1")
+def sync_config(backend: str = "localfs"):
+    step(f"write pageserver.toml (backend={backend}) + identity.toml on node0, compute_hook_stub.py on node1")
     tmpl = (lib.CONFIG_DIR / "pageserver.toml.tmpl").read_text()
     ps_toml = (tmpl.replace("__REMOTE_BIN__", lib.REMOTE_BIN)
                     .replace("__REMOTE_HOME__", lib.REMOTE_HOME)
+                    .replace("__REMOTE_STORAGE__", lib.remote_storage_toml(backend))
                     .replace("__STORCON_IP__", lib.node_ip(lib.STORCON_NODE)))
     local_tmp = lib.CONFIG_DIR / "_tmp_pageserver.toml"
     local_tmp.write_text(ps_toml)
@@ -179,14 +180,25 @@ def start_safekeeper():
     lib.ssh_background(lib.STORCON_NODE, cmd, f"{lib.REMOTE_SVC}/safekeeper.log")
 
 
-def start_pageserver():
-    step(f"pageserver on node{lib.PAGESERVER_NODE}:9898/64000")
+def start_pageserver(backend: str = "localfs"):
+    step(f"pageserver on node{lib.PAGESERVER_NODE}:9898/64000 (backend={backend})")
     if is_running(lib.PAGESERVER_NODE, "pageserver -D"):
         print("  already running")
         return
     lib.ssh(lib.PAGESERVER_NODE, "mkdir -p /mydata/ps/tenants", timeout=20)
-    cmd = f"{lib.REMOTE_BIN}/pageserver -D /mydata/ps"
+    cmd = f"{lib.pageserver_env(backend)}{lib.REMOTE_BIN}/pageserver -D /mydata/ps"
     lib.ssh_background(lib.PAGESERVER_NODE, cmd, f"{lib.REMOTE_SVC}/pageserver.log")
+
+
+def stop_pageserver(timeout_s: float = 180):
+    step(f"stopping pageserver on node{lib.PAGESERVER_NODE}")
+    lib.ssh_pkill(lib.PAGESERVER_NODE, "pageserver -D")
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if not is_running(lib.PAGESERVER_NODE, "pageserver -D"):
+            return
+        time.sleep(2)
+    raise TimeoutError("pageserver did not exit after SIGTERM")
 
 
 def wait_for_registration(timeout_s: float = 120):
@@ -221,6 +233,8 @@ def main():
     ap.add_argument("--binaries-only", action="store_true")
     ap.add_argument("--status", action="store_true")
     ap.add_argument("--skip-binaries", action="store_true")
+    ap.add_argument("--backend", choices=lib.BACKENDS, default="localfs",
+                    help="remote storage backend; minio/s3 need storage_backend.py setup first")
     args = ap.parse_args()
 
     if args.status:
@@ -232,7 +246,7 @@ def main():
         sync_binaries()
     if args.binaries_only:
         return
-    sync_config()
+    sync_config(args.backend)
     start_broker()
     start_storcon_postgres()
     start_compute_hook_stub()
@@ -240,7 +254,7 @@ def main():
     start_storage_controller()
     time.sleep(2)
     start_safekeeper()
-    start_pageserver()
+    start_pageserver(args.backend)
     wait_for_registration()
     print("\n== deploy complete ==")
 
